@@ -1,0 +1,136 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Nerves of Vision
+
+## Section
+
+```elixir
+# TO RUN ON YOUR NERVES DEVICE
+
+# cmd "epmd -daemon"
+# Node.start(:"nerves@#{Toolshed.hostname()}.local")
+# Node.set_cookie(:mycookie)
+```
+
+```elixir
+NxHailo.MJPEGStream.start_link([])
+```
+
+```elixir
+NxHailo.MJPEGStream.get_frame()
+```
+
+```elixir
+priv = to_string(:code.priv_dir(:nx_hailo))
+{:ok, hailo_model} = NxHailo.Hailo.load("#{priv}/yolov8m.hef")
+
+# classes =
+#   File.read!("#{priv}/yolov8m_classes.json")
+#   |> :json.decode()
+#   |> Enum.with_index()
+#   |> Map.new(fn {v, k} -> {k, v} end)
+
+```
+
+```elixir
+classes =
+  File.read!("#{priv}/yolov8m_classes.json")
+  |> :json.decode()
+  |> Enum.with_index()
+  |> Map.new(fn {v, k} -> {k, v} end)
+
+```
+
+```elixir
+mat = 
+  NxHailo.MJPEGStream.get_frame()
+  |> Evision.imdecode(Evision.Constant.cv_IMREAD_COLOR_RGB())
+```
+
+```elixir
+NxHailo.Helpers.Preprocess.yolo_preprocess(mat, {640, 640})
+```
+
+```elixir
+detected_objects = 
+  NxHailo.yolo_detect(hailo_model, classes, mat) 
+  # |> Enum.filter(& &1.class_id == 0 and &1.score >= 0.5)
+  |> then(&NxHailo.Helpers.YOLODraw.draw_detected_objects(mat, &1, "yolo8m"))
+```
+
+```elixir
+frame = Kino.Frame.new()
+```
+
+```elixir
+Stream.interval(20)
+|> Stream.map(fn _ -> NxHailo.MJPEGStream.get_frame() end)
+|> Stream.reject(&is_nil/1)
+|> Stream.map(&Evision.imdecode(&1, Evision.Constant.cv_IMREAD_COLOR_RGB()))
+|> Enum.reduce(nil, fn mat, prev_avg_time ->
+  
+  {infer_time, detected_objects} = :timer.tc(fn ->
+    hailo_model
+    |> NxHailo.yolo_detect(classes, mat)
+    |> Enum.filter(& &1.class_id == 0 and &1.score >= 0.5)
+    
+  end)
+
+  ###### CALC FPS
+  infer_time_ms = round(infer_time/1_000)
+
+  alpha = 0.8
+  avg_time = 
+    if is_nil(prev_avg_time) do 
+      infer_time_ms
+    else
+      # exp smoothing
+      alpha*infer_time_ms + (1 - alpha)*prev_avg_time
+    end
+  
+  fps = round(1000/avg_time)
+  #####
+
+  ##### DRAW RESULT
+  mat = NxHailo.Helpers.YOLODraw.draw_detected_objects(mat, detected_objects, "#{fps} FPS")
+  Kino.Frame.render(frame, mat)
+
+  avg_time
+end)
+
+```
+
+## Tracking
+
+```elixir
+tracker = NxHailo.Trackers.SimpleTracker.new()
+```
+
+```elixir
+frame = Kino.Frame.new()
+```
+
+```elixir
+Stream.interval(20)
+|> Stream.map(fn _ -> NxHailo.MJPEGStream.get_frame() end)
+|> Stream.reject(&is_nil/1)
+|> Stream.map(&Evision.imdecode(&1, Evision.Constant.cv_IMREAD_COLOR_RGB()))
+|> Enum.reduce(tracker, fn mat, tracker ->
+  
+
+  detected_objects = 
+    hailo_model
+    |> NxHailo.yolo_detect(classes, mat)
+    |> Enum.filter(& &1.class_id == 0 and &1.score >= 0.5)
+
+
+  now_ms = DateTime.utc_now(:millisecond) |> DateTime.to_unix(:millisecond)
+  {tracker, _events} = NxHailo.Trackers.SimpleTracker.update(tracker, detected_objects, now_ms)
+  
+  ##### DRAW RESULT
+  mat = NxHailo.Helpers.YOLODraw.draw_tracks(mat, Map.values(tracker.tracks), "")
+  Kino.Frame.render(frame, mat)
+
+  tracker
+end)
+```
