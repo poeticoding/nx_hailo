@@ -343,24 +343,16 @@ build_detailed_vstream_info_map(ErlNifEnv *env,
                               vstream_info.nms_shape.number_of_classes)),
         &nms_shape_map_erl);
 
-    // Use the union members based on nms_shape.order_type
-    // Exposing both might be simplest if Elixir side can pick
     enif_make_map_put(
         env, nms_shape_map_erl,
-        fine::encode(env, fine::Atom("max_bboxes_per_class_or_total")),
-        (vstream_info.nms_shape.order_type == HAILO_NMS_RESULT_ORDER_BY_SCORE)
-            ? fine::encode(env, static_cast<uint64_t>(
-                                    vstream_info.nms_shape.max_bboxes_total))
-            : fine::encode(env,
-                           static_cast<uint64_t>(
-                               vstream_info.nms_shape.max_bboxes_per_class)),
+        fine::encode(env, fine::Atom("max_bboxes_total")),
+        fine::encode(env, static_cast<uint64_t>(vstream_info.nms_shape.max_bboxes_total)),
         &nms_shape_map_erl);
-    // Also expose order_type itself
-    // You'll need an atom helper for hailo_nms_result_order_type_t
-    // ERL_NIF_TERM nms_order_type_atom = nms_result_order_type_to_atom(env,
-    // vstream_info.nms_shape.order_type); enif_make_map_put(env,
-    // nms_shape_map_erl, fine::encode(env, fine::Atom("nms_result_order")),
-    // nms_order_type_atom, &nms_shape_map_erl);
+    enif_make_map_put(
+        env, nms_shape_map_erl,
+        fine::encode(env, fine::Atom("max_bboxes_per_class")),
+        fine::encode(env, static_cast<uint64_t>(vstream_info.nms_shape.max_bboxes_per_class)),
+        &nms_shape_map_erl);
 
     enif_make_map_put(env, map_term, fine::encode(env, fine::Atom("nms_shape")),
                       nms_shape_map_erl, &map_term);
@@ -368,22 +360,9 @@ build_detailed_vstream_info_map(ErlNifEnv *env,
                       fine::encode(env, fine::Atom("nil")), &map_term);
 
     // Calculate frame_size for NMS stream
-    uint32_t num_detections_for_size_calc = 0;
-    if (vstream_info.nms_shape.order_type == HAILO_NMS_RESULT_ORDER_BY_CLASS ||
-        vstream_info.nms_shape.order_type == HAILO_NMS_RESULT_ORDER_HW) {
-      num_detections_for_size_calc =
+    uint32_t num_detections_for_size_calc =
           vstream_info.nms_shape.number_of_classes *
           vstream_info.nms_shape.max_bboxes_per_class;
-    } else if (vstream_info.nms_shape.order_type ==
-               HAILO_NMS_RESULT_ORDER_BY_SCORE) {
-      num_detections_for_size_calc = vstream_info.nms_shape.max_bboxes_total;
-    } else {
-      // Default or error: if nms_shape.order_type is unknown, use
-      // max_bboxes_per_class as a common case.
-      num_detections_for_size_calc =
-          vstream_info.nms_shape.number_of_classes *
-          vstream_info.nms_shape.max_bboxes_per_class;
-    }
 
     // This structure (6 floats: ymin, xmin, ymax, xmax, confidence, class_id)
     // is common for YOLO NMS outputs. Verify this against your specific model's

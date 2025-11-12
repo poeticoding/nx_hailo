@@ -10,7 +10,7 @@ defmodule NxHailo.MixProject do
       app: @app,
       version: @version,
       elixir: "~> 1.17",
-      archives: [nerves_bootstrap: "~> 1.13.1"],
+      archives: [nerves_bootstrap: "~> 1.14.0"],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
@@ -29,6 +29,7 @@ defmodule NxHailo.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
+      mod: {NxHailo.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -37,14 +38,14 @@ defmodule NxHailo.MixProject do
   defp deps do
     [
       # Dependencies for all targets
-      {:nerves, "~> 1.10", runtime: false},
+      {:nerves, "~> 1.12", runtime: false},
       {:shoehorn, "~> 0.9.1"},
       {:ring_logger, "~> 0.11.0"},
       {:toolshed, "~> 0.4.0"},
 
       # Allow Nerves.Runtime on host to support development, testing and CI.
       # See config/host.exs for usage.
-      {:nerves_runtime, "~> 0.13.0"},
+      {:nerves_runtime, "~> 0.13"},
 
       # Dependencies for all targets except :host
       {:nerves_pack, "~> 0.7.1", targets: @all_targets},
@@ -54,15 +55,17 @@ defmodule NxHailo.MixProject do
       # bumps to Nerves systems. Since these include Linux kernel and Erlang
       # version updates, please review their release notes in case
       # changes to your application are needed.
-      {:nerves_system_rpi5, "~> 0.6.1", runtime: false, targets: :rpi5},
+      {:nerves_system_rpi5, "~> 0.7", runtime: false, targets: :rpi5},
       {:evision, "~> 0.2"},
-      {:exla, "~> 0.10.0"},
+      {:exla, "~> 0.10"},
       {:bandit, "~> 1.5"},
-      {:nx, "~> 0.6"},
+      {:nx, "~> 0.10"},
       {:elixir_make, "~> 0.6", runtime: false},
       {:fine, "~> 0.1.0", runtime: false},
       {:req, "~> 0.5.10", runtime: false, optional: true},
       {:yaml_elixir, "~> 2.10"},
+
+      {:phoenix_pubsub, "~> 2.2"},
 
       # Deps for running the livebook demo
       {:kino, "~> 0.14"}
